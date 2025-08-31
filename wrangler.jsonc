@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "englitune-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-08-23",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "vctk-corpus",
+      "database_id": "1fd3baa3-4bd8-403f-ab4d-ae9f48557b45",
+      "experimental_remote": true
+    }
+  ]
+}
