@@ -1,5 +1,7 @@
 # englitune-worker
 
+[![Test](https://github.com/silvioprog/englitune-worker/actions/workflows/test.yml/badge.svg)](https://github.com/silvioprog/englitune-worker/actions/workflows/test.yml)
+
 A Cloudflare Worker API for retrieving random transcripts with speaker data from the VCTK corpus, with support for excluding specific speaker/transcript combinations. Built with [Hono](https://hono.dev) framework for fast, type-safe API development.
 
 ## Features
