@@ -7,7 +7,7 @@
     "dev": "wrangler dev --var CORS_ORIGIN:\"*\"",
     "deploy": "wrangler deploy --minify",
     "lint": "eslint .",
-    "test": "vitest --run",
+    "test": "vitest run",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "prepare": "husky"
   },
@@ -28,6 +28,6 @@
     "prettier": "^3.7.4",
     "typescript-eslint": "^8.52.0",
     "vitest": "^4.0.16",
-    "wrangler": "^4.57.0"
+    "wrangler": "^4.58.0"
   }
 }
