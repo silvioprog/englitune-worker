@@ -1,17 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { getRandomTranscriptsWithSpeaker } from "../src/queries";
+import getRandomTranscriptsWithSpeaker from "./queries";
 
-// Mock D1Database types for testing
-interface MockD1PreparedStatement {
-  bind: (...values: any[]) => MockD1PreparedStatement;
-  all: <T = Record<string, any>>() => Promise<{ results: T[] }>;
-}
-
-interface MockD1Database {
-  prepare: (query: string) => MockD1PreparedStatement;
-}
-
-// Test data
 const mockTranscriptData = [
   {
     transcript: "Hello, how are you today?",
@@ -41,32 +30,28 @@ const mockTranscriptData = [
   }
 ];
 
-describe("getRandomTranscriptsWithSpeaker", () => {
-  const createMockDatabase = (
-    results: any[] = mockTranscriptData
-  ): MockD1Database & { mockStatement: MockD1PreparedStatement } => {
-    const mockStatement: MockD1PreparedStatement = {
-      bind: vi.fn().mockReturnThis(),
-      all: vi.fn().mockResolvedValue({ results })
-    };
-
-    const mockDatabase = {
-      prepare: vi.fn().mockReturnValue(mockStatement),
-      mockStatement
-    };
-
-    return mockDatabase;
+const createMockDatabase = (results = mockTranscriptData) => {
+  const mockStatement = {
+    bind: vi.fn().mockReturnThis(),
+    all: vi.fn().mockResolvedValue({ results })
+  };
+  const mockDatabase = {
+    prepare: vi.fn().mockReturnValue(mockStatement),
+    mockStatement
   };
 
+  return mockDatabase;
+};
+
+describe("getRandomTranscriptsWithSpeaker", () => {
   describe("basic functionality", () => {
     it("should return transcripts with speaker data", async () => {
       const mockDb = createMockDatabase();
-      const result = await getRandomTranscriptsWithSpeaker(
-        mockDb as any,
-        2,
-        new Map()
-      );
-
+      const result = await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 2,
+        excluded: new Map()
+      });
       expect(result).toEqual(mockTranscriptData);
       expect(mockDb.prepare).toHaveBeenCalledWith(
         expect.stringContaining("SELECT")
@@ -83,8 +68,11 @@ describe("getRandomTranscriptsWithSpeaker", () => {
 
     it("should include LIMIT in query", async () => {
       const mockDb = createMockDatabase();
-      await getRandomTranscriptsWithSpeaker(mockDb as any, 5, new Map());
-
+      await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 5,
+        excluded: new Map()
+      });
       expect(mockDb.prepare).toHaveBeenCalledWith(
         expect.stringContaining("LIMIT ?")
       );
@@ -92,8 +80,11 @@ describe("getRandomTranscriptsWithSpeaker", () => {
 
     it("should include ORDER BY RANDOM() in query", async () => {
       const mockDb = createMockDatabase();
-      await getRandomTranscriptsWithSpeaker(mockDb as any, 3, new Map());
-
+      await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 3,
+        excluded: new Map()
+      });
       expect(mockDb.prepare).toHaveBeenCalledWith(
         expect.stringContaining("ORDER BY RANDOM()")
       );
@@ -101,9 +92,12 @@ describe("getRandomTranscriptsWithSpeaker", () => {
 
     it("should select correct columns with aliases", async () => {
       const mockDb = createMockDatabase();
-      await getRandomTranscriptsWithSpeaker(mockDb as any, 1, new Map());
-
-      const query = (mockDb.prepare as any).mock.calls[0][0];
+      await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 1,
+        excluded: new Map()
+      });
+      const query = mockDb.prepare.mock.calls[0][0];
       expect(query).toContain("t.transcript");
       expect(query).toContain("t.sequence");
       expect(query).toContain("t.speaker_id AS speaker");
@@ -117,10 +111,12 @@ describe("getRandomTranscriptsWithSpeaker", () => {
   describe("excluded parameter handling", () => {
     it("should not include WHERE clause when excluded map is empty", async () => {
       const mockDb = createMockDatabase();
-
-      await getRandomTranscriptsWithSpeaker(mockDb as any, 5, new Map());
-
-      const query = (mockDb.prepare as any).mock.calls[0][0];
+      await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 5,
+        excluded: new Map()
+      });
+      const query = mockDb.prepare.mock.calls[0][0];
       expect(query).not.toContain("WHERE");
       expect(mockDb.mockStatement.bind).toHaveBeenCalledWith(5);
     });
@@ -128,10 +124,12 @@ describe("getRandomTranscriptsWithSpeaker", () => {
     it("should include WHERE clause with single excluded speaker and sequence", async () => {
       const mockDb = createMockDatabase();
       const excluded = new Map([["101", new Set(["T001"])]]);
-
-      await getRandomTranscriptsWithSpeaker(mockDb as any, 3, excluded);
-
-      const query = (mockDb.prepare as any).mock.calls[0][0];
+      await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 3,
+        excluded
+      });
+      const query = mockDb.prepare.mock.calls[0][0];
       expect(query).toContain(
         "WHERE NOT ((t.speaker_id = ? AND t.sequence IN (?)))"
       );
@@ -145,10 +143,12 @@ describe("getRandomTranscriptsWithSpeaker", () => {
         ["102", new Set(["T002"])],
         ["103", new Set(["T003"])]
       ]);
-
-      await getRandomTranscriptsWithSpeaker(mockDb as any, 2, excluded);
-
-      const query = (mockDb.prepare as any).mock.calls[0][0];
+      await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 2,
+        excluded
+      });
+      const query = mockDb.prepare.mock.calls[0][0];
       expect(query).toContain(
         "WHERE NOT ((t.speaker_id = ? AND t.sequence IN (?)) OR (t.speaker_id = ? AND t.sequence IN (?)) OR (t.speaker_id = ? AND t.sequence IN (?)))"
       );
@@ -166,10 +166,12 @@ describe("getRandomTranscriptsWithSpeaker", () => {
     it("should include WHERE clause with speaker having multiple excluded sequences", async () => {
       const mockDb = createMockDatabase();
       const excluded = new Map([["101", new Set(["T001", "T002", "T003"])]]);
-
-      await getRandomTranscriptsWithSpeaker(mockDb as any, 2, excluded);
-
-      const query = (mockDb.prepare as any).mock.calls[0][0];
+      await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 2,
+        excluded
+      });
+      const query = mockDb.prepare.mock.calls[0][0];
       expect(query).toContain(
         "WHERE NOT ((t.speaker_id = ? AND t.sequence IN (?, ?, ?)))"
       );
@@ -190,10 +192,12 @@ describe("getRandomTranscriptsWithSpeaker", () => {
           new Set([`T${String(i + 1).padStart(3, "0")}`])
         ])
       );
-
-      await getRandomTranscriptsWithSpeaker(mockDb as any, 1, largeExcludedMap);
-
-      const query = (mockDb.prepare as any).mock.calls[0][0];
+      await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 1,
+        excluded: largeExcludedMap
+      });
+      const query = mockDb.prepare.mock.calls[0][0];
       const expectedConditions = Array.from(
         { length: 50 },
         () => "(t.speaker_id = ? AND t.sequence IN (?))"
@@ -213,9 +217,11 @@ describe("getRandomTranscriptsWithSpeaker", () => {
   describe("parameter binding", () => {
     it("should bind limit when no excluded IDs", async () => {
       const mockDb = createMockDatabase();
-
-      await getRandomTranscriptsWithSpeaker(mockDb as any, 7, new Map());
-
+      await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 7,
+        excluded: new Map()
+      });
       expect(mockDb.mockStatement.bind).toHaveBeenCalledTimes(1);
       expect(mockDb.mockStatement.bind).toHaveBeenCalledWith(7);
     });
@@ -227,9 +233,11 @@ describe("getRandomTranscriptsWithSpeaker", () => {
         ["102", new Set(["T002"])],
         ["103", new Set(["T003"])]
       ]);
-
-      await getRandomTranscriptsWithSpeaker(mockDb as any, 4, excluded);
-
+      await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 4,
+        excluded
+      });
       expect(mockDb.mockStatement.bind).toHaveBeenCalledTimes(1);
       expect(mockDb.mockStatement.bind).toHaveBeenCalledWith(
         "101",
@@ -246,52 +254,44 @@ describe("getRandomTranscriptsWithSpeaker", () => {
   describe("return value handling", () => {
     it("should return empty array when no results", async () => {
       const mockDb = createMockDatabase([]);
-
-      const result = await getRandomTranscriptsWithSpeaker(
-        mockDb as any,
-        5,
-        new Map()
-      );
-
+      const result = await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 5,
+        excluded: new Map()
+      });
       expect(result).toEqual([]);
     });
 
     it("should return single result", async () => {
       const singleResult = [mockTranscriptData[0]];
       const mockDb = createMockDatabase(singleResult);
-
-      const result = await getRandomTranscriptsWithSpeaker(
-        mockDb as any,
-        1,
-        new Map()
-      );
-
+      const result = await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 1,
+        excluded: new Map()
+      });
       expect(result).toEqual(singleResult);
       expect(result).toHaveLength(1);
     });
 
     it("should return multiple results", async () => {
       const mockDb = createMockDatabase(mockTranscriptData);
-
-      const result = await getRandomTranscriptsWithSpeaker(
-        mockDb as any,
-        3,
-        new Map()
-      );
-
+      const result = await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 3,
+        excluded: new Map()
+      });
       expect(result).toEqual(mockTranscriptData);
       expect(result).toHaveLength(3);
     });
 
     it("should preserve all transcript properties", async () => {
       const mockDb = createMockDatabase([mockTranscriptData[0]]);
-
-      const result = await getRandomTranscriptsWithSpeaker(
-        mockDb as any,
-        1,
-        new Map()
-      );
-
+      const result = await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 1,
+        excluded: new Map()
+      });
       expect(result[0]).toHaveProperty(
         "transcript",
         "Hello, how are you today?"
@@ -312,13 +312,11 @@ describe("getRandomTranscriptsWithSpeaker", () => {
         }
       ];
       const mockDb = createMockDatabase(resultWithoutRegion);
-
-      const result = await getRandomTranscriptsWithSpeaker(
-        mockDb as any,
-        1,
-        new Map()
-      );
-
+      const result = await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 1,
+        excluded: new Map()
+      });
       expect(result[0]).toHaveProperty("region", undefined);
     });
   });
@@ -326,61 +324,64 @@ describe("getRandomTranscriptsWithSpeaker", () => {
   describe("edge cases", () => {
     it("should handle limit of 0", async () => {
       const mockDb = createMockDatabase([]);
-
-      await getRandomTranscriptsWithSpeaker(mockDb as any, 0, new Map());
-
+      await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 0,
+        excluded: new Map()
+      });
       expect(mockDb.mockStatement.bind).toHaveBeenCalledWith(0);
     });
 
     it("should handle duplicate excluded sequences (automatically deduplicated by Set)", async () => {
       const mockDb = createMockDatabase();
-      const excluded = new Map([
-        ["101", new Set(["T001", "T001", "T001"])] // Set automatically deduplicates
-      ]);
-
-      await getRandomTranscriptsWithSpeaker(mockDb as any, 1, excluded);
-
-      expect(mockDb.mockStatement.bind).toHaveBeenCalledWith(
-        "101",
-        "T001", // Only one T001 because Set deduplicates
-        1
-      );
+      const excluded = new Map([["101", new Set(["T001", "T001", "T001"])]]);
+      await getRandomTranscriptsWithSpeaker({
+        db: mockDb as unknown as D1Database,
+        limit: 1,
+        excluded
+      });
+      expect(mockDb.mockStatement.bind).toHaveBeenCalledWith("101", "T001", 1);
     });
   });
 
   describe("database error handling", () => {
     it("should propagate database errors", async () => {
-      const mockStatement: MockD1PreparedStatement = {
+      const mockStatement = {
         bind: vi.fn().mockReturnThis(),
         all: vi.fn().mockRejectedValue(new Error("Database connection failed"))
       };
-
       const mockDb = {
-        prepare: vi.fn().mockReturnValue(mockStatement)
+        prepare: vi.fn().mockReturnValue(mockStatement),
+        mockStatement
       };
-
       await expect(
-        getRandomTranscriptsWithSpeaker(mockDb as any, 1, new Map())
+        getRandomTranscriptsWithSpeaker({
+          db: mockDb as unknown as D1Database,
+          limit: 1,
+          excluded: new Map()
+        })
       ).rejects.toThrow("Database connection failed");
     });
 
     it("should handle SQL syntax errors", async () => {
-      const mockStatement: MockD1PreparedStatement = {
+      const mockStatement = {
         bind: vi.fn().mockReturnThis(),
         all: vi.fn().mockRejectedValue(new Error("SQL syntax error"))
       };
-
       const mockDb = {
-        prepare: vi.fn().mockReturnValue(mockStatement)
+        prepare: vi.fn().mockReturnValue(mockStatement),
+        mockStatement
       };
-
       const excluded = new Map([
         ["101", new Set(["T001"])],
         ["102", new Set(["T002"])]
       ]);
-
       await expect(
-        getRandomTranscriptsWithSpeaker(mockDb as any, 5, excluded)
+        getRandomTranscriptsWithSpeaker({
+          db: mockDb as unknown as D1Database,
+          limit: 5,
+          excluded
+        })
       ).rejects.toThrow("SQL syntax error");
     });
   });

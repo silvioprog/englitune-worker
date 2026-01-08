@@ -26,14 +26,19 @@ const getRandomTranscriptsWithSpeakerWhereClause = (
   if (conditions.length === 0) {
     return "";
   }
+
   return `WHERE NOT (${conditions.join(" OR ")})`;
 };
 
-export const getRandomTranscriptsWithSpeaker = async (
-  db: D1Database,
-  limit: number,
-  excluded: Map<string, Set<string>>
-): Promise<TranscriptWithSpeaker[]> => {
+const getRandomTranscriptsWithSpeaker = async ({
+  db,
+  limit,
+  excluded
+}: {
+  db: D1Database;
+  limit: number;
+  excluded: Map<string, Set<string>>;
+}) => {
   const prepared = db.prepare(`
     SELECT
       t.transcript,
@@ -49,13 +54,13 @@ export const getRandomTranscriptsWithSpeaker = async (
     ORDER BY RANDOM()
     LIMIT ?;
   `);
-  const validEntries = Array.from(excluded.entries()).filter(
+  const entries = Array.from(excluded.entries()).filter(
     ([, sequences]) => sequences.size > 0
   );
   const stmt =
-    validEntries.length > 0
+    entries.length > 0
       ? prepared.bind(
-          ...validEntries.flatMap(([speakerId, sequences]) => [
+          ...entries.flatMap(([speakerId, sequences]) => [
             speakerId,
             ...Array.from(sequences)
           ]),
@@ -63,5 +68,8 @@ export const getRandomTranscriptsWithSpeaker = async (
         )
       : prepared.bind(limit);
   const { results } = await stmt.all<TranscriptWithSpeaker>();
+
   return results;
 };
+
+export default getRandomTranscriptsWithSpeaker;

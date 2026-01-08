@@ -1,25 +1,39 @@
-import { getParams, ParamsError } from "./params";
-import { getRandomTranscriptsWithSpeaker } from "./queries";
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import validators from "./validators";
+import getRandomTranscriptsWithSpeaker from "./queries";
 
-export default {
-  async fetch(request, env, _ctx): Promise<Response> {
-    try {
-      const { isFavicon, limit, excluded } = getParams(request);
-      if (isFavicon) {
-        return new Response(null, {
-          headers: { "Cache-Control": "public, max-age=604800, immutable" },
-          status: 204
-        });
-      }
-      return Response.json(
-        await getRandomTranscriptsWithSpeaker(env.DB, limit, excluded)
-      );
-    } catch (error) {
-      if (error instanceof ParamsError) {
-        return Response.json({ error: error.message }, { status: 400 });
-      }
-      console.error(error);
-      return Response.json({ error: "Internal server error" }, { status: 500 });
-    }
-  }
-} satisfies ExportedHandler<Env>;
+const app = new Hono<{ Bindings: CloudflareBindings }>();
+
+app.use("*", (c, next) => {
+  return cors({
+    origin: c.env.CORS_ORIGIN,
+    allowMethods: ["GET", "OPTIONS"]
+  })(c, next);
+});
+
+app.notFound((c) => {
+  return c.json({ error: "Not found" }, 404);
+});
+
+app.onError((err, c) => {
+  console.error(`${err}`);
+  return c.json({ error: "Internal server error" }, 500);
+});
+
+app.get("/favicon.ico", (c) => {
+  return c.body(null, 204, {
+    "Cache-Control": "public, max-age=604800, immutable"
+  });
+});
+
+app.get("/", validators, async (c) => {
+  return c.json(
+    await getRandomTranscriptsWithSpeaker({
+      db: c.env.DB,
+      ...c.req.valid("query")
+    })
+  );
+});
+
+export default app;
