@@ -1,6 +1,6 @@
 # englitune-worker
 
-A Cloudflare Worker API for retrieving random transcripts with speaker data from the VCTK corpus, with support for excluding specific speaker/transcript combinations.
+A Cloudflare Worker API for retrieving random transcripts with speaker data from the VCTK corpus, with support for excluding specific speaker/transcript combinations. Built with [Hono](https://hono.dev) framework for fast, type-safe API development.
 
 ## Features
 
@@ -8,7 +8,8 @@ A Cloudflare Worker API for retrieving random transcripts with speaker data from
 - 🚫 **Flexible Exclusions**: Exclude specific speaker/transcript combinations using advanced filtering
 - 📊 **Rich Speaker Data**: Returns transcript text, sequences, speaker demographics (age, gender, accent, region)
 - ⚡ **Fast Performance**: Built on Cloudflare Workers with D1 database
-- 🛡️ **Robust Validation**: Comprehensive parameter validation and error handling
+- 🛡️ **Robust Validation**: Comprehensive parameter validation and error handling using Hono validators
+- 🌐 **CORS Support**: Configurable CORS with environment-based origin control
 - 🧪 **Comprehensive Testing**: Extensive test suite covering all functionality
 
 ## API Reference
@@ -16,8 +17,10 @@ A Cloudflare Worker API for retrieving random transcripts with speaker data from
 ### Base URL
 
 ```raw
-https://your-worker.your-subdomain.workers.dev
+https://englitune-worker.silvioprog.dev
 ```
+
+Or your custom domain configured in Cloudflare.
 
 ### Endpoints
 
@@ -123,8 +126,10 @@ Database or server errors:
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 18.17.1 or higher (required by Wrangler 4.x)
 - Cloudflare account with Workers and D1 access
+
+**Note:** The project includes a `.nvmrc` file specifying Node.js 24.12.0 for development consistency, but the project is compatible with Node.js 18.17.1+.
 
 ### Setup
 
@@ -132,6 +137,9 @@ Database or server errors:
 # Clone the repository
 git clone https://github.com/silvioprog/englitune-worker.git
 cd englitune-worker
+
+# Use the Node version specified in .nvmrc (optional, but recommended)
+nvm use
 
 # Install dependencies
 npm install
@@ -143,28 +151,28 @@ wrangler d1 create vctk-corpus
 ### Scripts
 
 ```bash
-# Development server
+# Development server (with CORS set to * for local testing)
 npm run dev
 
 # Run tests
 npm test
 
-# Watch mode for tests
-npm run test:watch
-
 # Deploy to Cloudflare
 npm run deploy
 
-# Generate TypeScript types
+# Generate TypeScript types from Wrangler config
 npm run cf-typegen
 ```
 
 ### Configuration
 
-Update `wrangler.jsonc` with your D1 database configuration:
+Update `wrangler.jsonc` with your D1 database configuration and CORS settings:
 
-```json
+```jsonc
 {
+  "vars": {
+    "CORS_ORIGIN": "https://your-domain.com"
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -175,14 +183,19 @@ Update `wrangler.jsonc` with your D1 database configuration:
 }
 ```
 
+**CORS Configuration:**
+
+- **Development**: Uses `--var CORS_ORIGIN:"*"` in the dev script to allow all origins locally
+- **Production**: Set `CORS_ORIGIN` in `wrangler.jsonc` to restrict to your domain
+
 ## Testing
 
-The project includes comprehensive test coverage:
+The project includes comprehensive test coverage with tests co-located with source files:
 
-- **Complete test suite** Across multiple test files
-- **Parameter validation tests**: HTTP methods, paths, limits, exclusions
-- **Query generation tests**: SQL generation and parameter binding
-- **Integration tests**: End-to-end worker functionality
+- **Complete test suite**: Tests located alongside source files in `src/`
+- **Parameter validation tests**: HTTP methods, paths, limits, exclusions (`src/validators.test.ts`)
+- **Query generation tests**: SQL generation and parameter binding (`src/queries.test.ts`)
+- **Integration tests**: End-to-end worker functionality including CORS (`src/index.test.ts`)
 - **Error handling tests**: Database errors and malformed requests
 
 ```bash
@@ -190,25 +203,27 @@ The project includes comprehensive test coverage:
 npm test
 
 # Run specific test file
-npm test test/params.spec.ts
-npm test test/queries.spec.ts
-npm test test/index.spec.ts
+npm test src/validators.test.ts
+npm test src/queries.test.ts
+npm test src/index.test.ts
 ```
 
 ## Architecture
 
 ### Core Components
 
-- **`src/index.ts`**: Main worker entry point and request handling
-- **`src/params.ts`**: Parameter validation and parsing
+- **`src/index.ts`**: Main Hono app entry point with CORS middleware, routing, and error handling
+- **`src/validators.ts`**: Parameter validation and parsing using Hono validators
 - **`src/queries.ts`**: Database query generation and execution
 
 ### Key Features
 
-- **Type Safety**: Full TypeScript support with proper type definitions
+- **Hono Framework**: Fast, lightweight web framework optimized for Cloudflare Workers
+- **Type Safety**: Full TypeScript support with generated types from Wrangler config
+- **CORS Middleware**: Environment-based CORS configuration (dev: `*`, production: specific domain)
 - **Efficient Exclusions**: Uses `Map<string, Set<string>>` for automatic deduplication
 - **SQL Generation**: Dynamic WHERE clause generation for complex exclusions
-- **Error Handling**: Comprehensive error handling with appropriate HTTP status codes
+- **Error Handling**: Comprehensive error handling with appropriate HTTP status codes via Hono
 - **Performance**: Optimized SQL queries with proper indexing support
 
 ## License
