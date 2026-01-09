@@ -5,6 +5,12 @@
   "compatibility_date": "2026-01-08",
   "workers_dev": false,
   "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "englitune-worker.silvioprog.dev",
+      "custom_domain": true
+    }
+  ],
   "vars": {
     "CORS_ORIGIN": "https://englitune.silvioprog.dev"
   },
